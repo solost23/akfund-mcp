@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "akfund"
+version = "0.1.0"
+description = "China mutual fund & market data toolkit — realtime estimates, NAV history, sector quotes, and news aggregation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["fund", "finance", "china", "eastmoney", "A-share", "基金", "公募基金"]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/your-username/akfund"
