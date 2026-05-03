@@ -4,6 +4,7 @@ Fund data: realtime estimates, NAV history, and technical metrics.
 """
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict
 
 from ._http import request_fund_json, request_text
@@ -186,3 +187,56 @@ def _consecutive_streak(navs: list[NavRecord]) -> tuple[str, int]:
         else:
             break
     return (direction or "N/A", count)
+
+
+def get_multi_fund_metrics(codes: list[str], days: int = 180) -> dict[str, FundMetrics | dict]:
+    """
+    Fetch technical metrics for multiple funds concurrently.
+    并发抓取多只基金的技术指标。
+
+    Args:
+        codes: List of fund codes / 基金代码列表
+        days: Number of trading days of history to use (default 180) / 历史净值天数，默认180
+
+    Returns:
+        Dict keyed by fund code. Each value is FundMetrics or {"error": str}.
+        以基金代码为 key 的字典，值为 FundMetrics 或 {"error": str}。
+    """
+    def _fetch(code: str) -> tuple[str, FundMetrics | dict]:
+        try:
+            history = get_nav_history(code, target=days)
+            return code, get_fund_metrics(code, history=history)
+        except Exception as e:
+            return code, {"error": str(e)}
+
+    results: dict[str, FundMetrics | dict] = {}
+    with ThreadPoolExecutor(max_workers=min(len(codes), 10)) as executor:
+        futures = {executor.submit(_fetch, code): code for code in codes}
+        for future in as_completed(futures):
+            code, result = future.result()
+            results[code] = result
+    return results
+
+
+def get_multi_realtime_estimates(codes: list[str]) -> dict[str, RealtimeEstimate | dict]:
+    """
+    Fetch intraday estimates for multiple funds concurrently.
+    并发抓取多只基金的盘中估值。
+
+    Args:
+        codes: List of fund codes / 基金代码列表
+
+    Returns:
+        Dict keyed by fund code. Each value is RealtimeEstimate or {"error": str}.
+        以基金代码为 key 的字典，值为 RealtimeEstimate 或 {"error": str}。
+    """
+    def _fetch(code: str) -> tuple[str, RealtimeEstimate | dict]:
+        return code, get_realtime_estimate(code)
+
+    results: dict[str, RealtimeEstimate | dict] = {}
+    with ThreadPoolExecutor(max_workers=min(len(codes), 10)) as executor:
+        futures = {executor.submit(_fetch, code): code for code in codes}
+        for future in as_completed(futures):
+            code, result = future.result()
+            results[code] = result
+    return results

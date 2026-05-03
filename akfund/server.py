@@ -39,6 +39,33 @@ def get_fund_metrics(code: str, days: int = 180) -> str:
 
 
 @mcp.tool()
+def get_multi_fund_metrics(codes: list[str], days: int = 180) -> str:
+    """
+    Get technical metrics for multiple funds concurrently (faster than calling get_fund_metrics repeatedly).
+    并发抓取多只基金的技术指标，比逐只调用 get_fund_metrics 快数倍。
+
+    Args:
+        codes: List of fund codes, e.g. ["012970", "008702", "012365"] / 基金代码列表
+        days: Number of trading days of history to use (default 180) / 历史净值天数，默认180
+    """
+    result = akfund.get_multi_fund_metrics(codes, days=days)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def get_multi_realtime_estimates(codes: list[str]) -> str:
+    """
+    Get intraday estimated NAV and change % for multiple funds concurrently.
+    并发抓取多只基金的盘中估值和涨跌幅。
+
+    Args:
+        codes: List of fund codes, e.g. ["012970", "008702", "012365"] / 基金代码列表
+    """
+    result = akfund.get_multi_realtime_estimates(codes)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
 def get_nav_history(code: str, days: int = 30) -> str:
     """
     Get historical NAV records for a fund, newest first.
