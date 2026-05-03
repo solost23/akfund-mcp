@@ -13,4 +13,4 @@ keywords = ["fund", "finance", "china", "eastmoney", "A-share", "基金", "公�
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/solost23/akfund"
+Repository = "https://github.com/solost23/akfund-mcp"

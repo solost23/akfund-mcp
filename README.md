@@ -1,10 +1,8 @@
-# akfund
+# akfund-mcp
 
-China mutual fund & market data toolkit.
+China mutual fund & market data toolkit — use as a Python library or as an MCP server.
 
-Fetch realtime estimates, NAV history, sector quotes, and news from Eastmoney, Jin10, and official Chinese financial sources — no API key required.
-
-中国公募基金 & 市场行情数据抓取工具库。无需 API Key，直接抓取天天基金、东方财富、金十数据、申万行业板块及官方宏观数据。
+中国公募基金 & 市场行情数据抓取工具库，支持作为 Python 库直接调用，也可作为 MCP server 接入 Claude 桌面版、Cursor 等 AI 客户端。
 
 ---
 
@@ -16,9 +14,10 @@ Fetch realtime estimates, NAV history, sector quotes, and news from Eastmoney, J
 ## Installation / 安装
 
 ```bash
-git clone https://github.com/solost23/akfund.git
-cd akfund
+git clone https://github.com/solost23/akfund-mcp.git
+cd akfund-mcp
 pip install -e .
+pip install mcp
 ```
 
 ## Usage / 使用方法
