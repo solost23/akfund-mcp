@@ -40,6 +40,19 @@ def get_fund_metrics(code: str, days: int = 180) -> str:
 
 
 @mcp.tool()
+def get_realtime_estimate(code: str) -> str:
+    """
+    Get intraday estimated NAV and change % for a single fund.
+    获取单只基金盘中估算净值和涨跌幅。
+
+    Args:
+        code: Fund code, e.g. "012970" / 基金代码，例如 "012970"
+    """
+    result = akfund.get_realtime_estimate(code)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
 def get_multi_fund_metrics(codes: list[str], days: int = 180) -> str:
     """
     Get technical metrics for multiple funds concurrently (faster than calling get_fund_metrics repeatedly).
@@ -204,9 +217,11 @@ def get_daily_brief(
     sectors: list[str] | None = None,
     keywords: list[str] | None = None,
     news_pages: int = 8,
+    codes: list[str] | None = None,
 ) -> str:
     """
-    Fetch all daily market data in one concurrent call: market quotes, sector quotes, and all news sources.
+    Fetch all daily market data in one concurrent call: market quotes, sector quotes,
+    realtime fund estimates, and all news sources.
     一次并发调用获取所有每日行情数据，替代分别调用7个数据源工具。
 
     Args:
@@ -217,11 +232,15 @@ def get_daily_brief(
                   Defaults to built-in financial keyword list if not provided.
                   新闻过滤关键词，不传则使用内置财经关键词列表。
         news_pages: Eastmoney news pages to fetch, 50 items/page (default 8) / 东方财富快讯页数，默认8页
+        codes: Fund codes to fetch intraday estimates for, e.g. ["012970", "008702"].
+               Skipped if not provided.
+               基金代码列表，传入后并发拉取盘中估值；不传则跳过。
 
     Returns:
-        Dict with keys: market, sectors, eastmoney, jin10, domestic_media, official_macro, overseas.
+        Dict with keys: market, sectors, eastmoney, jin10, domestic_media, official_macro,
+        overseas, and estimates (if codes provided).
     """
-    result = akfund.get_daily_brief(sectors=sectors, keywords=keywords, news_pages=news_pages)
+    result = akfund.get_daily_brief(sectors=sectors, keywords=keywords, news_pages=news_pages, codes=codes)
     return json.dumps(result, ensure_ascii=False)
 
 
