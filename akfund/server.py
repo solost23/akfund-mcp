@@ -11,7 +11,20 @@ mcp = FastMCP("akfund")
 
 
 @mcp.tool()
-def get_realtime_estimate(code: str) -> str:
+def search_fund(name: str, limit: int = 10) -> str:
+    """
+    Search funds by name or keyword.
+    通过名称或关键词搜索基金，返回匹配的基金代码和基本信息。
+
+    Args:
+        name: Fund name or keyword, e.g. "鹏华半导体", "黄金ETF", "012970" / 基金名称或关键词
+        limit: Max number of results (default 10) / 最多返回条数，默认10
+    """
+    result = akfund.search_fund(name, limit=limit)
+    return json.dumps(result, ensure_ascii=False)
+
+
+
     """
     Get intraday estimated NAV and change % for a fund.
     获取基金盘中估算净值和涨跌幅。

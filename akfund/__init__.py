@@ -9,6 +9,7 @@ from .fund import (
     get_fund_metrics,
     get_multi_fund_metrics,
     get_multi_realtime_estimates,
+    search_fund,
 )
 from .market import get_market_quotes
 from .sector import get_sector_quotes
@@ -20,6 +21,7 @@ __all__ = [
     "get_fund_metrics",
     "get_multi_fund_metrics",
     "get_multi_realtime_estimates",
+    "search_fund",
     "get_market_quotes",
     "get_sector_quotes",
     "get_eastmoney_news",

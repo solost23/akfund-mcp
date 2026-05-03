@@ -6,8 +6,9 @@ Fund data: realtime estimates, NAV history, and technical metrics.
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict
+from urllib.parse import quote
 
-from ._http import request_fund_json, request_text
+from ._http import request_fund_json, request_json, request_text
 
 
 class RealtimeEstimate(TypedDict):
@@ -38,7 +39,79 @@ class FundMetrics(TypedDict):
     streak_days: int
 
 
+class FundSearchResult(TypedDict):
+    code: str
+    name: str
+    fund_type: str
+    company: str
+
+
+def search_fund(name: str, limit: int = 10) -> list[FundSearchResult]:
+    """
+    Search funds by name or keyword using Eastmoney suggest API.
+    通过名称或关键词搜索基金，返回匹配的基金代码和基本信息。
+
+    Args:
+        name: Fund name or keyword to search / 基金名称或关键词
+        limit: Max number of results to return (default 10) / 最多返回条数，默认10
+
+    Returns:
+        List of FundSearchResult dicts with code, name, fund_type, company.
+        包含 code、name、fund_type、company 的字典列表。
+    """
+    url = (
+        "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx"
+        f"?callback=&m=1&key={quote(name)}"
+    )
+    try:
+        data = request_json(url, referer="https://fund.eastmoney.com/")
+        results = []
+        for d in data.get("Datas", [])[:limit]:
+            base = d.get("FundBaseInfo") or {}
+            results.append({
+                "code": d.get("CODE", ""),
+                "name": d.get("NAME", ""),
+                "fund_type": base.get("FTYPE", ""),
+                "company": base.get("JJGS", ""),
+            })
+        return results
+    except Exception:
+        return []
+
+
 def get_realtime_estimate(code: str) -> RealtimeEstimate | dict:
+    """
+    Fetch intraday estimated NAV and change % from Eastmoney.
+    从天天基金抓取盘中估算净值和涨跌幅。
+
+    Returns RealtimeEstimate on success, or {"error": str} on failure.
+    成功返回 RealtimeEstimate，失败返回 {"error": str}。
+    """
+    url = f"https://fundgz.1234567.com.cn/js/{code}.js"
+    raw = request_text(
+        url,
+        extra_headers=[
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer: https://fund.eastmoney.com/",
+        ],
+    )
+    m = re.search(r"jsonpgz\((\{.*?\})\)", raw)
+    if not m:
+        return {"error": "no data"}
+    try:
+        import json
+        d = json.loads(m.group(1))
+        return {
+            "code": code,
+            "gsz": float(d.get("gsz", 0)),
+            "gszzl": float(d.get("gszzl", 0)),
+            "gztime": d.get("gztime", ""),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
     """
     Fetch intraday estimated NAV and change % from Eastmoney.
     从天天基金抓取盘中估算净值和涨跌幅。

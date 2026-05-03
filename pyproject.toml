@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "akfund-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "China mutual fund & market data toolkit — realtime estimates, NAV history, sector quotes, and news aggregation"
 readme = "README.md"
 requires-python = ">=3.11"
