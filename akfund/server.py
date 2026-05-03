@@ -63,12 +63,20 @@ def get_market_quotes() -> str:
 
 
 @mcp.tool()
-def get_sector_quotes() -> str:
+def get_sector_quotes(sectors: list[str] | None = None) -> str:
     """
     Get real-time quotes for Shenwan industry sectors.
-    获取申万行业板块实时涨跌幅（半导体、光伏、机器人、化工、软件、黄金、有色金属等）。
+    获取申万行业板块实时涨跌幅。
+
+    Args:
+        sectors: List of sector names to query, e.g. ["半导体", "黄金", "机器人"].
+                 Returns all supported sectors if not provided.
+                 Available sectors include: 半导体、光伏设备、光伏主材、机器人、基础化工、
+                 软件开发、黄金、有色金属、计算机、银行、医药生物、食品饮料、电子、通信、
+                 汽车、家用电器、煤炭、石油石化、国防军工 等。
+                 板块名称列表，不传则返回全部支持的板块。
     """
-    result = akfund.get_sector_quotes()
+    result = akfund.get_sector_quotes(sectors=sectors)
     return json.dumps(result, ensure_ascii=False)
 
 
@@ -80,7 +88,10 @@ def get_eastmoney_news(pages: int = 4, keywords: list[str] | None = None) -> str
 
     Args:
         pages: Number of pages to fetch, 50 items/page (default 4) / 抓取页数，每页50条，默认4页
-        keywords: Filter keywords. Defaults to built-in financial keywords / 过滤关键词，不传则使用内置财经关键词
+        keywords: Keywords to filter by. Pass only the terms relevant to your holdings
+                  to get faster, more targeted results, e.g. ["半导体", "芯片", "光伏"].
+                  Defaults to a broad built-in financial keyword list if not provided.
+                  过滤关键词，建议只传与持仓相关的词以加快速度，不传则使用内置宽泛关键词列表。
     """
     result = akfund.get_eastmoney_news(pages=pages, keywords=keywords)
     return json.dumps(result, ensure_ascii=False)
@@ -93,7 +104,10 @@ def get_jin10_news(keywords: list[str] | None = None) -> str:
     获取金十数据快讯，按关键词过滤。
 
     Args:
-        keywords: Filter keywords. Defaults to built-in financial keywords / 过滤关键词，不传则使用内置财经关键词
+        keywords: Keywords to filter by. Pass only the terms relevant to your holdings
+                  for faster, more targeted results, e.g. ["黄金", "美联储", "汇率"].
+                  Defaults to a broad built-in financial keyword list if not provided.
+                  过滤关键词，建议只传与持仓相关的词，不传则使用内置宽泛关键词列表。
     """
     result = akfund.get_jin10_news(keywords=keywords)
     return json.dumps(result, ensure_ascii=False)
@@ -106,7 +120,10 @@ def get_domestic_media(keywords: list[str] | None = None) -> str:
     获取国内主要财经媒体头条（中国证券报、财新网、证券时报、上海证券报）。
 
     Args:
-        keywords: Filter keywords. Defaults to built-in financial keywords / 过滤关键词，不传则使用内置财经关键词
+        keywords: Keywords to filter by. Pass only the terms relevant to your holdings
+                  for faster, more targeted results, e.g. ["半导体", "光伏", "机器人"].
+                  Defaults to a broad built-in financial keyword list if not provided.
+                  过滤关键词，建议只传与持仓相关的词，不传则使用内置宽泛关键词列表。
     """
     result = akfund.get_domestic_media(keywords=keywords)
     return json.dumps(result, ensure_ascii=False)
