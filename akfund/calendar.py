@@ -1,12 +1,12 @@
 """
-A-share trading calendar: hybrid live + static approach.
-A股交易日历：今日状态用实时接口，未来交易日用静态节假日表。
+A-share trading calendar: fully live via SZSE official calendar API.
+A股交易日历：通过深交所官方接口实时查询，无需维护静态节假日表。
 """
 
 from datetime import date, datetime, timedelta
 from typing import TypedDict
 
-from ._http import request_json
+from ._http import request_json, request_text
 
 
 class TradingStatus(TypedDict):
@@ -14,82 +14,47 @@ class TradingStatus(TypedDict):
     is_trading_day: bool    # whether market is open / 是否交易日
     is_pre_holiday: bool    # last trading day before a holiday / 是否节前最后交易日
     reason: str             # 交易日 / 周末 / 节假日 / 补班日
-    holiday_name: str       # name of upcoming/current holiday / 节假日名称（如有）
+    holiday_name: str       # always "" — SZSE API doesn't provide holiday names
     last_trading_day: str   # most recent trading day / 最近交易日
     next_trading_day: str   # next trading day / 下一个交易日
     days_to_next: int       # calendar days until next trading day / 距下一交易日天数
 
 
-# Static holiday table — used only for next_trading_day and is_pre_holiday lookups
-# Update each year when CSRC/SSE publishes the official holiday schedule
-_HOLIDAYS: dict[date, str] = {
-    # 2026
-    date(2026, 1, 1):  "元旦",
-    date(2026, 1, 28): "春节", date(2026, 1, 29): "春节", date(2026, 1, 30): "春节",
-    date(2026, 1, 31): "春节", date(2026, 2, 2):  "春节", date(2026, 2, 3):  "春节",
-    date(2026, 4, 4):  "清明节", date(2026, 4, 5): "清明节", date(2026, 4, 6): "清明节",
-    date(2026, 5, 1):  "劳动节", date(2026, 5, 2): "劳动节", date(2026, 5, 3): "劳动节",
-    date(2026, 5, 4):  "劳动节", date(2026, 5, 5): "劳动节",
-    date(2026, 6, 19): "端午节", date(2026, 6, 20): "端午节", date(2026, 6, 21): "端午节",
-    date(2026, 10, 1): "国庆节", date(2026, 10, 2): "国庆节", date(2026, 10, 3): "国庆节",
-    date(2026, 10, 4): "国庆节", date(2026, 10, 5): "国庆节", date(2026, 10, 6): "国庆节",
-    date(2026, 10, 7): "国庆节", date(2026, 10, 8): "国庆节",
-    # 2027
-    date(2027, 1, 1):  "元旦",
-    date(2027, 1, 15): "春节", date(2027, 1, 16): "春节", date(2027, 1, 17): "春节",
-    date(2027, 1, 18): "春节", date(2027, 1, 19): "春节", date(2027, 1, 20): "春节",
-    date(2027, 1, 21): "春节",
-    date(2027, 4, 5):  "清明节",
-    date(2027, 5, 1):  "劳动节", date(2027, 5, 2): "劳动节", date(2027, 5, 3): "劳动节",
-    date(2027, 5, 4):  "劳动节", date(2027, 5, 5): "劳动节",
-    date(2027, 6, 9):  "端午节", date(2027, 6, 10): "端午节", date(2027, 6, 11): "端午节",
-    date(2027, 10, 1): "国庆节", date(2027, 10, 2): "国庆节", date(2027, 10, 3): "国庆节",
-    date(2027, 10, 4): "国庆节", date(2027, 10, 5): "国庆节", date(2027, 10, 6): "国庆节",
-    date(2027, 10, 7): "国庆节",
-}
-
-_MAKEUP_WORKDAYS: set[date] = {
-    # 2026
-    date(2026, 1, 25), date(2026, 2, 8),   # 春节补班
-    date(2026, 4, 26),                      # 劳动节补班
-    date(2026, 9, 27), date(2026, 10, 11),  # 国庆节补班
-    # 2027
-    date(2027, 1, 23),                      # 春节补班
-    date(2027, 5, 8),                       # 劳动节补班
-    date(2027, 9, 18),                      # 国庆节补班
-}
-
-
-def _fetch_last_trade_date() -> date | None:
-    """Fetch the last trading date from Eastmoney SSE index live data."""
+def _fetch_month_calendar(year: int, month: int) -> dict[date, bool]:
+    """
+    Fetch trading day flags for a given month from SZSE.
+    Returns {date: is_trading_day}.
+    """
+    import subprocess, json as _json
+    month_str = f"{year}-{month:02d}"
+    url = f"https://www.szse.cn/api/report/exchange/onepersistenthour/monthList?month={month_str}&random=0.1"
     try:
-        data = request_json(
-            "https://push2.eastmoney.com/api/qt/stock/get"
-            "?secid=1.000001&fields=f86&fltt=2&ut=fa5fd1943c7b386f172d6893dbfba10b",
-            referer="https://www.eastmoney.com/",
-        )
-        ts = data.get("data", {}).get("f86")
-        if ts:
-            return datetime.fromtimestamp(int(ts)).date()
+        raw = request_text(url, extra_headers=[
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer: https://www.szse.cn/",
+        ])
+        data = _json.loads(raw)
+        result = {}
+        for item in data.get("data", []):
+            d = date.fromisoformat(item["jyrq"])
+            result[d] = item["jybz"] == "1"
+        return result
     except Exception:
-        pass
-    return None
+        return {}
 
 
-def _is_trading_day_static(d: date) -> bool:
-    """Static check using holiday table — used for future dates."""
-    if d in _MAKEUP_WORKDAYS:
-        return True
-    if d.weekday() >= 5:
-        return False
-    return d not in _HOLIDAYS
-
-
-def _next_trading_day_static(d: date) -> date:
-    nxt = d + timedelta(days=1)
-    while not _is_trading_day_static(nxt):
-        nxt += timedelta(days=1)
-    return nxt
+def _get_calendar_for_dates(start: date, end: date) -> dict[date, bool]:
+    """Fetch calendar covering start..end, spanning multiple months if needed."""
+    calendar: dict[date, bool] = {}
+    cur = date(start.year, start.month, 1)
+    while cur <= end:
+        calendar.update(_fetch_month_calendar(cur.year, cur.month))
+        # advance to next month
+        if cur.month == 12:
+            cur = date(cur.year + 1, 1, 1)
+        else:
+            cur = date(cur.year, cur.month + 1, 1)
+    return calendar
 
 
 def get_trading_status(date_str: str | None = None) -> TradingStatus:
@@ -97,69 +62,70 @@ def get_trading_status(date_str: str | None = None) -> TradingStatus:
     Check A-share trading status for a given date (defaults to today).
     查询指定日期（默认今天）的A股交易状态。
 
-    Today's is_trading_day uses live Eastmoney data (accurate, no maintenance needed).
-    next_trading_day and is_pre_holiday use a static holiday table.
-    今日交易状态通过实时接口判断；下一交易日和节前判断使用静态节假日表。
+    Uses SZSE official trading calendar API — no static holiday table needed,
+    works across all years automatically.
+    通过深交所官方交易日历接口查询，无需维护节假日表，永久有效。
 
     Args:
         date_str: Date in YYYY-MM-DD format. Defaults to today / 日期，默认今天
 
     Returns:
-        TradingStatus with: is_trading_day, is_pre_holiday, reason, last_trading_day,
-        next_trading_day, days_to_next.
+        TradingStatus with: is_trading_day, is_pre_holiday, reason,
+        last_trading_day, next_trading_day, days_to_next.
     """
     d = date.fromisoformat(date_str) if date_str else date.today()
-    today = date.today()
 
-    # For today: use live API for accurate is_trading_day
-    # For other dates: fall back to static table
-    last_trade = None
-    if d == today:
-        last_trade = _fetch_last_trade_date()
+    # Fetch calendar for d's month + next month (for next_trading_day lookup)
+    end = d + timedelta(days=14)
+    calendar = _get_calendar_for_dates(d, end)
 
-    if last_trade is not None:
-        is_td = (last_trade == d)
+    # Also fetch previous month if d is near the start of the month
+    if d.day <= 5:
+        prev = date(d.year, d.month, 1) - timedelta(days=1)
+        calendar.update(_fetch_month_calendar(prev.year, prev.month))
+
+    is_td = calendar.get(d, False)
+
+    # Determine reason
+    if d.weekday() >= 5:
+        reason = "周末" if not is_td else "补班日"
     else:
-        is_td = _is_trading_day_static(d)
-        last_trade = d if is_td else _next_trading_day_static(d - timedelta(days=1))
+        reason = "交易日" if is_td else "节假日"
 
-    # Determine reason using static table (live API can't distinguish holiday vs weekend)
-    if d in _MAKEUP_WORKDAYS:
-        reason = "补班日"
-    elif d.weekday() >= 5 and d not in _HOLIDAYS:
-        reason = "周末"
-    elif d in _HOLIDAYS:
-        reason = "节假日"
-    elif not is_td and d.weekday() < 5:
-        # weekday, not in static table, but live API says not trading → unknown holiday
-        reason = "节假日"
-    else:
-        reason = "交易日" if is_td else "周末"
+    # Find last trading day (on or before d)
+    last_td = d
+    for i in range(1, 15):
+        candidate = d - timedelta(days=i)
+        if candidate not in calendar:
+            # fetch that month if needed
+            calendar.update(_fetch_month_calendar(candidate.year, candidate.month))
+        if calendar.get(candidate, False):
+            last_td = candidate
+            break
+    if is_td:
+        last_td = d
 
-    # Next trading day and pre-holiday: always use static table
-    nxt = _next_trading_day_static(d)
+    # Find next trading day (after d)
+    nxt = d + timedelta(days=1)
+    for _ in range(14):
+        if nxt not in calendar:
+            calendar.update(_fetch_month_calendar(nxt.year, nxt.month))
+        if calendar.get(nxt, False):
+            break
+        nxt += timedelta(days=1)
+
     days_to_next = (nxt - d).days
 
-    is_pre_holiday = False
-    holiday_name = _HOLIDAYS.get(d, "")
-    if is_td:
-        check = d + timedelta(days=1)
-        for _ in range(5):
-            if check in _HOLIDAYS:
-                is_pre_holiday = True
-                holiday_name = _HOLIDAYS[check]
-                break
-            if _is_trading_day_static(check):
-                break
-            check += timedelta(days=1)
+    # Pre-holiday: today is a trading day and next trading day is 3+ days away
+    is_pre_holiday = is_td and days_to_next >= 3
 
     return {
         "date": d.isoformat(),
         "is_trading_day": is_td,
         "is_pre_holiday": is_pre_holiday,
         "reason": reason,
-        "holiday_name": holiday_name,
-        "last_trading_day": last_trade.isoformat(),
+        "holiday_name": "",
+        "last_trading_day": last_td.isoformat(),
         "next_trading_day": nxt.isoformat(),
         "days_to_next": days_to_next,
     }
