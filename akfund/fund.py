@@ -111,38 +111,6 @@ def get_realtime_estimate(code: str) -> RealtimeEstimate | dict:
         return {"error": str(e)}
 
 
-
-    """
-    Fetch intraday estimated NAV and change % from Eastmoney.
-    从天天基金抓取盘中估算净值和涨跌幅。
-
-    Returns RealtimeEstimate on success, or {"error": str} on failure.
-    成功返回 RealtimeEstimate，失败返回 {"error": str}。
-    """
-    url = f"https://fundgz.1234567.com.cn/js/{code}.js"
-    raw = request_text(
-        url,
-        extra_headers=[
-            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Referer: https://fund.eastmoney.com/",
-        ],
-    )
-    m = re.search(r"jsonpgz\((\{.*?\})\)", raw)
-    if not m:
-        return {"error": "no data"}
-    try:
-        import json
-        d = json.loads(m.group(1))
-        return {
-            "code": code,
-            "gsz": float(d.get("gsz", 0)),
-            "gszzl": float(d.get("gszzl", 0)),
-            "gztime": d.get("gztime", ""),
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
 def get_nav_history(code: str, target: int = 180) -> list[NavRecord]:
     """
     Fetch historical NAV records (newest first).
@@ -313,3 +281,82 @@ def get_multi_realtime_estimates(codes: list[str]) -> dict[str, RealtimeEstimate
             code, result = future.result()
             results[code] = result
     return results
+
+
+class PortfolioHolding(TypedDict):
+    code: str
+    shares: float
+    latest_nav: float
+    latest_date: str
+    market_value: float
+    position_pct: float
+
+
+class PortfolioSummary(TypedDict):
+    holdings: list[PortfolioHolding]
+    total_value: float
+    baseline_value: float
+    cumulative_net_inflow: float
+    gain: float
+    return_rate: float
+
+
+def get_portfolio_summary(
+    holdings: dict[str, float],
+    baseline_value: float,
+    cumulative_net_inflow: float = 0.0,
+) -> PortfolioSummary | dict:
+    """
+    Compute portfolio market value and returns from share counts and latest NAVs.
+    根据持仓份额和最新净值计算组合市值、仓位占比和追踪期收益。
+
+    Args:
+        holdings: Fund code → share count, e.g. {"012970": 7090.81} / 基金代码 → 持有份额
+        baseline_value: Total portfolio value at tracking start / 追踪起始日总市值基准
+        cumulative_net_inflow: Net buy-ins since tracking start (buys - sells, including auto-invest)
+                               追踪期内累计净买入（买入-卖出，含定投）
+    """
+    def _fetch_latest(code: str) -> tuple[str, float, str]:
+        history = get_nav_history(code, target=1)
+        if history:
+            return code, history[0]["nav"], history[0]["date"]
+        return code, 0.0, ""
+
+    nav_map: dict[str, tuple[float, str]] = {}
+    with ThreadPoolExecutor(max_workers=min(len(holdings), 10)) as executor:
+        futures = {executor.submit(_fetch_latest, code): code for code in holdings}
+        for future in as_completed(futures):
+            code, nav, date = future.result()
+            nav_map[code] = (nav, date)
+
+    result_holdings: list[PortfolioHolding] = []
+    total_value = 0.0
+    for code, shares in holdings.items():
+        nav, date = nav_map.get(code, (0.0, ""))
+        mv = round(shares * nav, 2)
+        total_value += mv
+        result_holdings.append({
+            "code": code,
+            "shares": shares,
+            "latest_nav": nav,
+            "latest_date": date,
+            "market_value": mv,
+            "position_pct": 0.0,
+        })
+
+    total_value = round(total_value, 2)
+    for h in result_holdings:
+        h["position_pct"] = round(h["market_value"] / total_value * 100, 2) if total_value else 0.0
+
+    cost_basis = baseline_value + cumulative_net_inflow
+    gain = round(total_value - cost_basis, 2)
+    return_rate = round(gain / cost_basis * 100, 2) if cost_basis else 0.0
+
+    return {
+        "holdings": result_holdings,
+        "total_value": total_value,
+        "baseline_value": baseline_value,
+        "cumulative_net_inflow": cumulative_net_inflow,
+        "gain": gain,
+        "return_rate": return_rate,
+    }
