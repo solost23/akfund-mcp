@@ -59,6 +59,23 @@ def request_fund_json(url: str, timeout: int = 15) -> dict:
     return json.loads(r.stdout)
 
 
+def request_batch(secids: list[str], fields: str, timeout: int = 15) -> list[dict]:
+    """
+    Fetch multiple secids in a single request via ulist.np/get.
+    一次请求批量抓取多个标的行情，返回 diff 列表。
+    """
+    url = (
+        "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
+        f"?secids={','.join(secids)}&fields={fields}"
+        "&fltt=2&ut=fa5fd1943c7b386f172d6893dbfba10b&invt=2"
+    )
+    try:
+        data = request_json(url)
+        return (data.get("data") or {}).get("diff") or []
+    except Exception:
+        return []
+
+
 def request_text(url: str, extra_headers: list[str] | None = None, follow: bool = False, timeout: int = 10) -> str:
     """Fetch URL and return raw text. / 抓取 URL 并返回原始文本。"""
     cmd = ["curl", "-s", "--max-time", str(timeout)]
