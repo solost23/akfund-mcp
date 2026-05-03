@@ -20,7 +20,92 @@ pip install -e .
 pip install mcp
 ```
 
-## Usage / 使用方法
+## MCP server / 作为 MCP 工具使用
+
+akfund-mcp 提供了一个 MCP server，可以接入 Claude 桌面版、Cursor 等任何支持 MCP 协议的客户端，让 AI 直接调用基金数据接口。
+
+### 配置 Claude 桌面版
+
+打开 Claude 桌面版配置文件：
+
+- macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows：`%APPDATA%\Claude\claude_desktop_config.json`
+
+添加以下内容（注意替换为你本机的实际路径）：
+
+```json
+{
+  "mcpServers": {
+    "akfund": {
+      "command": "/opt/homebrew/bin/python3.11",
+      "args": ["/path/to/akfund-mcp/mcp_server.py"]
+    }
+  }
+}
+```
+
+保存后重启 Claude 桌面版。
+
+### 配置 Cursor
+
+在项目根目录创建 `.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "akfund": {
+      "command": "/opt/homebrew/bin/python3.11",
+      "args": ["/path/to/akfund-mcp/mcp_server.py"]
+    }
+  }
+}
+```
+
+### 配置 Claude Code（CLI）
+
+编辑 `~/.claude/settings.json`：
+
+```json
+{
+  "mcpServers": {
+    "akfund": {
+      "command": "/opt/homebrew/bin/python3.11",
+      "args": ["/path/to/akfund-mcp/mcp_server.py"]
+    }
+  }
+}
+```
+
+### 配置好之后怎么用
+
+配置完成后，在对话里直接用自然语言提问，AI 会自动调用对应工具：
+
+> 帮我查一下鹏华半导体今天的估值和涨跌幅
+
+> 现在半导体板块涨了多少？有什么相关新闻？
+
+> 帮我看看今天市场整体行情，A股和美股都怎么样
+
+> 查一下华夏黄金近3个月的走势，现在处于高位还是低位
+
+### 可用工具列表
+
+| 工具 | 说明 |
+|---|---|
+| `get_realtime_estimate(code)` | 单只基金盘中估值和涨跌幅 |
+| `get_fund_metrics(code, days)` | 基金技术指标（涨跌幅/回撤/位置/连涨跌） |
+| `get_nav_history(code, days)` | 历史净值列表 |
+| `get_market_quotes()` | A股、美股、黄金、汇率行情 |
+| `get_sector_quotes()` | 申万行业板块涨跌幅 |
+| `get_eastmoney_news(pages, keywords)` | 东方财富快讯 |
+| `get_jin10_news(keywords)` | 金十数据快讯 |
+| `get_domestic_media(keywords)` | 国内财经媒体头条 |
+| `get_official_macro()` | 央行、统计局、证监会、外汇局 |
+| `get_overseas()` | 美联储 RSS、世界黄金协会 |
+
+---
+
+## Usage / 作为 Python 库使用
 
 ### 1. 盘中基金估值
 
@@ -134,99 +219,6 @@ news = akfund.get_eastmoney_news(keywords=["黄金", "美联储", "降息"])
 ```bash
 python examples/daily_report.py
 ```
-
----
-
-## MCP server / 作为 MCP 工具使用
-
-akfund 提供了一个 MCP server，可以接入 Claude 桌面版、Cursor 等任何支持 MCP 协议的客户端，让 AI 直接调用基金数据接口。
-
-### 安装依赖
-
-```bash
-pip install mcp
-```
-
-### 配置 Claude 桌面版
-
-打开 Claude 桌面版配置文件：
-
-- macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows：`%APPDATA%\Claude\claude_desktop_config.json`
-
-添加以下内容（注意替换为你本机的实际路径）：
-
-```json
-{
-  "mcpServers": {
-    "akfund": {
-      "command": "/opt/homebrew/bin/python3.11",
-      "args": ["/path/to/akfund/mcp_server.py"]
-    }
-  }
-}
-```
-
-保存后重启 Claude 桌面版。
-
-### 配置 Cursor
-
-在项目根目录创建 `.cursor/mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "akfund": {
-      "command": "/opt/homebrew/bin/python3.11",
-      "args": ["/path/to/akfund/mcp_server.py"]
-    }
-  }
-}
-```
-
-### 配置 Claude Code（CLI）
-
-在项目目录下创建 `.claude/settings.json`，或编辑全局 `~/.claude/settings.json`：
-
-```json
-{
-  "mcpServers": {
-    "akfund": {
-      "command": "/opt/homebrew/bin/python3.11",
-      "args": ["/path/to/akfund/mcp_server.py"]
-    }
-  }
-}
-```
-
-### 配置好之后怎么用
-
-配置完成后，在对话里直接用自然语言提问，AI 会自动调用对应工具：
-
-> 帮我查一下鹏华半导体今天的估值和涨跌幅
-
-> 现在半导体板块涨了多少？有什么相关新闻？
-
-> 帮我看看今天市场整体行情，A股和美股都怎么样
-
-> 查一下华夏黄金近3个月的走势，现在处于高位还是低位
-
-AI 会根据问题自动选择调用 `get_realtime_estimate`、`get_sector_quotes`、`get_market_quotes` 等工具，不需要你手动指定。
-
-### 可用工具列表
-
-| 工具 | 说明 |
-|---|---|
-| `get_realtime_estimate(code)` | 单只基金盘中估值和涨跌幅 |
-| `get_fund_metrics(code, days)` | 基金技术指标（涨跌幅/回撤/位置/连涨跌） |
-| `get_nav_history(code, days)` | 历史净值列表 |
-| `get_market_quotes()` | A股、美股、黄金、汇率行情 |
-| `get_sector_quotes()` | 申万行业板块涨跌幅 |
-| `get_eastmoney_news(pages, keywords)` | 东方财富快讯 |
-| `get_jin10_news(keywords)` | 金十数据快讯 |
-| `get_domestic_media(keywords)` | 国内财经媒体头条 |
-| `get_official_macro()` | 央行、统计局、证监会、外汇局 |
-| `get_overseas()` | 美联储 RSS、世界黄金协会 |
 
 ---
 
