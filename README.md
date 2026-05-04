@@ -43,13 +43,15 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 
 ## 持仓
 
-| 基金代码 | 基金名称 | 持有份额 |
-|---|---|---:|
-| XXXXXX | 基金名称A | 1000.00 |
-| XXXXXX | 基金名称B | 2000.00 |
+| 基金代码 | 基金名称 | 持有份额 | 当前市值 | 仓位占比 |
+|---|---|---:|---:|---:|
+| XXXXXX | 基金名称A | 1000.00 | 0.00 | 0.00% |
+| XXXXXX | 基金名称B | 2000.00 | 0.00 | 0.00% |
 
 ## 收益追踪基准
 - 基准日：YYYY-MM-DD，基准市值：XXXXX.XX
+- 收益 = 当前总市值 - 基准市值 - 追踪期累计净买入
+- 收益率 = 收益 ÷ (基准市值 + 追踪期累计净买入)
 
 ## 决策偏好
 （在这里写你的操作风格，例如：偏保守/偏激进、止盈止损规则、仓位上限等）
@@ -57,11 +59,18 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 ## 执行流程
 每天说"按流程跑今天的基金决策"时：
 1. 调用 get_trading_status() 判断今天是否交易日
-2. 调用 get_portfolio_summary() 计算持仓市值和收益
-3. 调用 get_multi_fund_metrics() 获取技术指标
-4. 调用 get_multi_realtime_estimates() 获取盘中估值
-5. 调用 get_daily_brief() 获取市场行情和新闻
-6. 综合以上数据给出操作建议
+2. 并发调用以下工具采集数据：
+   - get_portfolio_summary() 计算持仓市值和收益
+   - calc_after_fee_return() 计算费后真实收益（fees_paid 默认 0）
+   - get_multi_fund_metrics() 获取技术指标
+   - get_multi_realtime_estimates() 获取盘中估值
+   - get_daily_brief() 获取市场行情和新闻
+   - check_portfolio_overlap() 检查持仓穿透重叠预警
+3. 综合以上数据给出操作建议
+4. 对每笔操作建议调用 run_trade_checklist() 做免悔校验：
+   - verdict=block：拦截，不输出该建议
+   - verdict=caution：保留建议，标注警告项
+   - verdict=proceed：正常输出
 ```
 
 ### 第二步：开始使用
@@ -87,6 +96,7 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 | `get_fund_info` | `code` | 基金经理、资产规模、管理费率、成立日期 |
 | `get_multi_fund_info` | `codes` | 多只基金基本信息（并发） |
 | `get_portfolio_summary` | `holdings`, `baseline_value`, `cumulative_net_inflow=0` | 持仓市值、仓位占比、追踪期收益（并发拉取最新净值） |
+| `calc_after_fee_return` | `holdings`, `baseline_value`, `cumulative_net_inflow=0`, `fees_paid=0`, `redemption_fee_pct=0` | 费后真实收益：将申购费计入成本基础，并展示假设赎回后净收益率 |
 
 ### 市场行情
 
@@ -111,6 +121,13 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 | 工具 | 参数 | 说明 |
 |---|---|---|
 | `get_daily_brief` | `sectors=[...]`, `keywords=[...]`, `news_pages=8` | 一次并发调用获取全部每日行情数据（市场+板块+所有新闻） |
+
+### 决策辅助
+
+| 工具 | 参数 | 说明 |
+|---|---|---|
+| `check_portfolio_overlap` | `fund_positions`, `threshold_pct=3.0` | 穿透各基金前十大持仓股，计算跨基金有效暴露，对超阈值股票发出预警 |
+| `run_trade_checklist` | `action`, `code`, `amount`, `today_change_pct`, `position_pct`, `streak_dir`, `streak_days`, `is_trading_day`, `is_pre_holiday`, `already_traded_today=False` | 交易前免悔清单：自动校验追高/追涨/仓位上限/节前风险等，返回 proceed/caution/block |
 
 **`get_sector_quotes`** 支持的板块名称：
 半导体、光伏设备、光伏主材、机器人、基础化工、软件开发、黄金、有色金属、计算机、银行、非银金融、医药生物、食品饮料、消费者服务、房地产、建筑材料、建筑装饰、电力设备、电子、通信、传媒、汽车、家用电器、纺织服饰、轻工制造、农林牧渔、钢铁、煤炭、石油石化、交通运输、公用事业、环保、国防军工、商贸零售、社会服务。

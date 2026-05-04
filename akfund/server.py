@@ -286,6 +286,113 @@ def get_trading_status(date_str: str | None = None) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 
+@mcp.tool()
+def calc_after_fee_return(
+    holdings: dict[str, float],
+    baseline_value: float,
+    cumulative_net_inflow: float = 0.0,
+    fees_paid: float = 0.0,
+    redemption_fee_pct: float = 0.0,
+) -> str:
+    """
+    Compute after-fee true return: adjusts cost basis for subscription fees paid,
+    and shows net proceeds if selling today after redemption fees.
+    计算费后真实收益：将申购费计入成本基础，展示假设赎回后的净收益。
+
+    Args:
+        holdings: Fund code → share count, e.g. {"012970": 7090.81} / 基金代码 → 持有份额
+        baseline_value: Portfolio value at tracking start / 追踪起始日总市值基准
+        cumulative_net_inflow: Net buy-ins since tracking start (buys - sells, including auto-invest) /
+                               追踪期累计净买入（买入-卖出，含定投）
+        fees_paid: Total subscription fees paid since tracking start (e.g. 45.0 means 45 yuan) /
+                   追踪期内累计已付申购费（元），默认0
+        redemption_fee_pct: Assumed redemption fee % if selling today (e.g. 0.5 means 0.5%) /
+                            假设今日赎回费率（如 0.5 表示 0.5%），默认0
+
+    Returns:
+        AfterFeeReturn with paper_gain, paper_return_pct (fees in cost basis),
+        and net_gain_if_sell, net_return_if_sell_pct (after redemption fee).
+        包含账面收益（费用计入成本）和假设赎回后净收益。
+    """
+    result = akfund.calc_after_fee_return(
+        holdings, baseline_value, cumulative_net_inflow, fees_paid, redemption_fee_pct
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def check_portfolio_overlap(
+    fund_positions: dict[str, float],
+    threshold_pct: float = 3.0,
+) -> str:
+    """
+    Detect stock concentration risk by penetrating fund holdings across the portfolio.
+    穿透各基金持仓，识别跨基金重叠的股票集中度风险，对有效暴露超阈值的股票发出预警。
+
+    Args:
+        fund_positions: Fund code → position % in portfolio, e.g. {"012970": 9.64, "021978": 10.36}
+                        基金代码 → 该基金在组合中的仓位占比%
+        threshold_pct: Effective exposure % above which a warning is raised (default 3.0) /
+                       有效暴露超过此阈值时发出预警，默认 3.0%
+
+    Returns:
+        PortfolioOverlapResult with per-stock effective exposure and warning messages.
+        包含各股有效暴露和预警信息的结果。
+    """
+    result = akfund.check_portfolio_overlap(fund_positions, threshold_pct=threshold_pct)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def run_trade_checklist(
+    action: str,
+    code: str,
+    amount: float,
+    today_change_pct: float,
+    position_pct: float,
+    streak_dir: str,
+    streak_days: int,
+    is_trading_day: bool,
+    is_pre_holiday: bool,
+    already_traded_today: bool = False,
+) -> str:
+    """
+    Run pre-trade regret-free checklist against the decision framework rules.
+    按决策框架规则运行交易前强制免悔清单，自动校验关键条件。
+
+    Args:
+        action: "buy" or "sell" / 买入或卖出
+        code: Fund code / 基金代码
+        amount: Trade amount in yuan / 交易金额（元）
+        today_change_pct: Today's estimated change % (e.g. 1.8 means +1.8%) / 今日估值涨跌幅
+        position_pct: Current position % in portfolio / 该基金当前仓位占比%
+        streak_dir: Consecutive direction "涨" or "跌" / 连续方向
+        streak_days: Number of consecutive days / 连续天数
+        is_trading_day: Whether today is a trading day / 今天是否是交易日
+        is_pre_holiday: Whether today is the last trading day before a holiday / 是否节前最后交易日
+        already_traded_today: Whether this fund was already traded today (default False) /
+                              今天是否已对该基金操作过，默认 False
+
+    Returns:
+        TradeChecklist with auto_checks, manual_checks, verdict ("proceed"/"caution"/"block"),
+        and verdict_reason.
+        包含自动检查项、手动确认项、裁决（proceed/caution/block）和裁决原因。
+    """
+    result = akfund.run_trade_checklist(
+        action=action,
+        code=code,
+        amount=amount,
+        today_change_pct=today_change_pct,
+        position_pct=position_pct,
+        streak_dir=streak_dir,
+        streak_days=streak_days,
+        is_trading_day=is_trading_day,
+        is_pre_holiday=is_pre_holiday,
+        already_traded_today=already_traded_today,
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
 

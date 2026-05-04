@@ -18,6 +18,9 @@ from .news import get_eastmoney_news, get_jin10_news, get_domestic_media, get_of
 from .brief import get_daily_brief
 from .info import get_fund_info, get_multi_fund_info
 from .calendar import get_trading_status
+from .fees import calc_after_fee_return
+from .overlap import get_fund_top_holdings, get_multi_fund_top_holdings, check_portfolio_overlap
+from .checklist import run_trade_checklist
 
 __all__ = [
     "get_realtime_estimate",
@@ -38,4 +41,9 @@ __all__ = [
     "get_fund_info",
     "get_multi_fund_info",
     "get_trading_status",
+    "calc_after_fee_return",
+    "get_fund_top_holdings",
+    "get_multi_fund_top_holdings",
+    "check_portfolio_overlap",
+    "run_trade_checklist",
 ]
