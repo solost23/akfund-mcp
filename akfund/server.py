@@ -430,7 +430,8 @@ def get_multi_fund_rank(codes: list[str]) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 
-
+@mcp.tool()
+def record_trade(
     code: str,
     action: str,
     amount: float,
