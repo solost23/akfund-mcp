@@ -97,6 +97,8 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 | `get_multi_fund_info` | `codes` | 多只基金基本信息（并发） |
 | `get_portfolio_summary` | `holdings`, `baseline_value`, `cumulative_net_inflow=0` | 持仓市值、仓位占比、追踪期收益（并发拉取最新净值） |
 | `calc_after_fee_return` | `holdings`, `baseline_value`, `cumulative_net_inflow=0`, `fees_paid=0`, `redemption_fee_pct=0` | 费后真实收益：将申购费计入成本基础，并展示假设赎回后净收益率 |
+| `get_fund_rank` | `code` | 同类排名、同类平均涨幅、四分位评级（今年来/近1周/近1月/近3月/近6月/近1年等各周期） |
+| `get_multi_fund_rank` | `codes` | 多只基金同类对比数据（并发） |
 
 ### 市场行情
 
@@ -126,8 +128,25 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
-| `check_portfolio_overlap` | `fund_positions`, `threshold_pct=3.0` | 穿透各基金前十大持仓股，计算跨基金有效暴露，对超阈值股票发出预警 |
+| `check_portfolio_overlap` | `fund_positions`, `threshold_pct=3.0` | 穿透各基金前十大持仓股，计算跨基金有效暴露，对超阈值股票发出预警；ETF联接和商品基金自动跳过并在 warnings 中标注，持仓数据超过1年的基金标注"数据过期" |
 | `run_trade_checklist` | `action`, `code`, `amount`, `today_change_pct`, `position_pct`, `streak_dir`, `streak_days`, `is_trading_day`, `is_pre_holiday`, `already_traded_today=False` | 交易前免悔清单：自动校验追高/追涨/仓位上限/节前风险等，返回 proceed/caution/block |
+
+### 交易记录（持久化）
+
+数据存储在 `~/.akfund/trades.json`，可通过环境变量 `AKFUND_DATA_DIR` 覆盖路径。
+
+| 工具 | 参数 | 说明 |
+|---|---|---|
+| `record_trade` | `code`, `action`, `amount`, `date_str=None`, `name=""`, `note=""` | 记录一笔手动买卖，返回含 `id` 的记录（可用 `delete_trade` 撤销） |
+| `delete_trade` | `trade_id` | 按 id 删除误录的交易记录 |
+| `get_trade_history` | `days=90`, `code=None` | 查询历史交易，最新在前，可按基金代码和天数过滤 |
+| `get_today_trades` | `code=None` | 查询今天已记录的交易，用于自动判断 `already_traded_today` |
+| `get_cumulative_net_inflow` | `since_date`, `auto_invest=None` | 计算自基准日起的累计净买入；传入定投配置后自动按深交所交易日历推算定投天数并叠加，结果直接传入 `get_portfolio_summary` 和 `calc_after_fee_return` |
+
+`auto_invest` 格式示例：
+```json
+[{"code": "270023", "amount": 150}, {"code": "017730", "amount": 100}, {"code": "012920", "amount": 50}]
+```
 
 **`get_sector_quotes`** 支持的板块名称：
 半导体、光伏设备、光伏主材、机器人、基础化工、软件开发、黄金、有色金属、计算机、银行、非银金融、医药生物、食品饮料、消费者服务、房地产、建筑材料、建筑装饰、电力设备、电子、通信、传媒、汽车、家用电器、纺织服饰、轻工制造、农林牧渔、钢铁、煤炭、石油石化、交通运输、公用事业、环保、国防军工、商贸零售、社会服务。

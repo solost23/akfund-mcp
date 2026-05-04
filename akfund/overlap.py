@@ -4,11 +4,15 @@ Portfolio overlap analysis: penetrate fund holdings to detect stock concentratio
 """
 
 import re
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict
 
-from ._http import request_fund_json
+from ._http import request_text
+
+_HEADERS = [
+    "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "Referer: https://fundf10.eastmoney.com/",
+]
 
 
 class StockHolding(TypedDict):
@@ -46,33 +50,51 @@ def get_fund_top_holdings(code: str) -> FundHoldings | dict:
     Args:
         code: Fund code / 基金代码
     """
-    url = (
-        f"https://api.fund.eastmoney.com/f10/JJCC"
-        f"?fundCode={code}&pageIndex=1&pageSize=10"
-    )
+    url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={code}&topline=10"
     try:
-        data = request_fund_json(url)
-        # Response structure: {"Data": {"fundStocks": [...], "SYRQDate": "..."}}
-        inner = data.get("Data") or {}
-        stocks_raw = inner.get("fundStocks") or []
-        report_date = inner.get("SYRQDate", "")
+        raw = request_text(url, extra_headers=_HEADERS)
+        if not raw or "content:\"\"" in raw:
+            # Empty content — fund holds no stocks (e.g. gold ETF)
+            return {"code": code, "report_date": "", "top_holdings": []}
 
+        # Report date: 截止至：<font class='px12'>2026-03-31</font>
+        date_m = re.search(r"截止至：<font[^>]*>(\d{4}-\d{2}-\d{2})</font>", raw)
+        report_date = date_m.group(1) if date_m else ""
+
+        # Each data row: <tr><td>seq</td><td ...>code</td><td ...>name</td>...<td class='tor'>8.68%</td>...
+        rows = re.findall(r"<tr>(.*?)</tr>", raw, re.DOTALL)
         top_holdings: list[StockHolding] = []
-        for s in stocks_raw[:10]:
-            try:
-                top_holdings.append({
-                    "stock_code": s.get("GPDM", ""),
-                    "stock_name": s.get("GPJC", ""),
-                    "weight_pct": float(s.get("JZBL", 0)),
-                })
-            except (ValueError, TypeError):
-                pass
 
-        return {
-            "code": code,
-            "report_date": report_date,
-            "top_holdings": top_holdings,
-        }
+        for row in rows:
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL)
+            if len(tds) < 7:
+                continue
+            def _text(s: str) -> str:
+                return re.sub(r"<[^>]+>", "", s).strip()
+
+            seq = _text(tds[0])
+            if not seq.isdigit():
+                continue  # skip header or non-data rows
+
+            stock_code = _text(tds[1])
+            stock_name = _text(tds[2])
+            weight_str = _text(tds[6]).rstrip("%")
+
+            if not stock_code or not stock_name:
+                continue
+            try:
+                weight = float(weight_str)
+            except ValueError:
+                continue
+
+            top_holdings.append({
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "weight_pct": weight,
+            })
+
+        return {"code": code, "report_date": report_date, "top_holdings": top_holdings[:10]}
+
     except Exception as e:
         return {"code": code, "error": str(e)}
 
@@ -153,6 +175,18 @@ def check_portfolio_overlap(
 
     # Build warning messages
     warnings: list[str] = []
+
+    # Data quality notes: flag funds with no holdings or stale data (>365 days)
+    from datetime import date, timedelta
+    stale_cutoff = (date.today() - timedelta(days=365)).isoformat()
+    for code, h in fund_holdings_map.items():
+        if "error" in h:
+            warnings.append(f"【数据缺失】{code} 持仓抓取失败，已跳过穿透计算")
+        elif not h.get("top_holdings"):
+            warnings.append(f"【无股票持仓】{code} 无个股持仓数据（可能为ETF联接或商品基金，已跳过）")
+        elif h.get("report_date", "") < stale_cutoff:
+            warnings.append(f"【数据过期】{code} 持仓数据截止 {h['report_date']}（超过1年），穿透结果仅供参考")
+
     warned = [s for s in overlap_stocks if s["warning"]]
     if warned:
         for s in warned:
@@ -164,7 +198,7 @@ def check_portfolio_overlap(
                 f"有效暴露 {s['effective_exposure_pct']:.2f}%，"
                 f"出现在：{funds_str}"
             )
-    else:
+    elif not any("缺失" in w or "过期" in w for w in warnings):
         warnings.append(f"无股票有效暴露超过 {threshold_pct}%，持仓分散度正常")
 
     return {

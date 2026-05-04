@@ -393,6 +393,140 @@ def run_trade_checklist(
     return json.dumps(result, ensure_ascii=False)
 
 
+@mcp.tool()
+def get_fund_rank(code: str) -> str:
+    """
+    Fetch peer comparison data for a fund: rank, peer average return, quartile rating.
+    获取基金同类对比数据：同类排名、同类平均涨幅、四分位评级。
+
+    Args:
+        code: Fund code / 基金代码
+
+    Returns:
+        FundRank with periods list. Each period includes:
+          - fund_return: this fund's return / 基金涨跌幅
+          - peer_avg: peer average return / 同类平均涨跌幅
+          - vs_peer: fund_return - peer_avg (positive = outperforming) / 超额收益（正数跑赢同类）
+          - rank / total: e.g. 140/5003 / 同类排名/总数
+          - percentile: rank/total*100, lower is better / 百分位，越低越好
+          - quartile: 优秀/良好/一般/不佳 / 四分位评级
+        Key for decision rules: vs_peer for 近3月 < -5% triggers heavy-operation review.
+        决策规则关键字段：近3月 vs_peer < -5 触发重操作评估。
+    """
+    result = akfund.get_fund_rank(code)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def get_multi_fund_rank(codes: list[str]) -> str:
+    """
+    Fetch peer comparison data for multiple funds concurrently.
+    并发抓取多只基金的同类对比数据（排名、同类平均、四分位）。
+
+    Args:
+        codes: List of fund codes / 基金代码列表
+    """
+    result = akfund.get_multi_fund_rank(codes)
+    return json.dumps(result, ensure_ascii=False)
+
+
+
+    code: str,
+    action: str,
+    amount: float,
+    date_str: str | None = None,
+    name: str = "",
+    note: str = "",
+) -> str:
+    """
+    Record a manual trade to persistent storage (~/.akfund/trades.json).
+    记录一笔手动买卖到本地持久化存储，用于后续自动计算 cumulative_net_inflow 和 already_traded_today。
+
+    Args:
+        code: Fund code / 基金代码
+        action: "buy" or "sell" / 买入或卖出
+        amount: Trade amount in yuan / 交易金额（元）
+        date_str: Trade date YYYY-MM-DD, defaults to today / 交易日期，默认今天
+        name: Fund name for readability / 基金名称（可选，便于阅读）
+        note: Optional note / 备注（可选）
+
+    Returns:
+        The recorded TradeRecord including its id (use id with delete_trade to undo).
+        写入的交易记录，含 id 字段（可用 delete_trade 撤销）。
+    """
+    result = akfund.record_trade(
+        code=code, action=action, amount=amount,
+        date_str=date_str, name=name, note=note,
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def delete_trade(trade_id: str) -> str:
+    """
+    Delete a trade record by id (for correcting mistakes).
+    按 id 删除误录的交易记录。
+
+    Args:
+        trade_id: The id field from a TradeRecord returned by record_trade /
+                  record_trade 返回的 id 字段
+
+    Returns:
+        {success, deleted_record} or {success: false, error}.
+    """
+    result = akfund.delete_trade(trade_id)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def get_trade_history(days: int = 90, code: str | None = None) -> str:
+    """
+    Get trade history from persistent storage, newest first.
+    从持久化存储获取交易历史，最新在前。
+
+    Args:
+        days: How many calendar days back to look (default 90) / 往前查多少天，默认90
+        code: Filter by fund code / 按基金代码过滤（可选）
+
+    Returns:
+        List of TradeRecord sorted by date descending.
+    """
+    result = akfund.get_trade_history(days=days, code=code)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def get_cumulative_net_inflow(
+    since_date: str,
+    auto_invest: list[dict] | None = None,
+) -> str:
+    """
+    Compute cumulative net inflow (buys - sells) since a baseline date.
+    Optionally adds auto-invest amounts by counting actual A-share trading days.
+    计算自基准日起的累计净买入（手动买卖 + 定投自动推算），用于传入 get_portfolio_summary 和 calc_after_fee_return。
+
+    Args:
+        since_date: Baseline date YYYY-MM-DD (exclusive — only trades strictly after this date count).
+                    基准日（不含当天，只统计之后的交易）
+        auto_invest: List of auto-invest configs. Each entry: {"code": "270023", "amount": 150}.
+                     Amount is yuan per trading day. The tool counts actual trading days since
+                     since_date using the SZSE calendar and multiplies by amount.
+                     定投配置列表，每项格式 {"code": "基金代码", "amount": 每交易日金额}。
+                     工具会自动按深交所交易日历统计交易日数并推算定投总额。
+                     示例：[{"code":"270023","amount":150},{"code":"017730","amount":100},{"code":"012920","amount":50}]
+
+    Returns:
+        NetInflowResult with:
+          - cumulative_net_inflow: total to pass into get_portfolio_summary / 传入 get_portfolio_summary 的值
+          - manual_net: net from manual trades only / 手动买卖净额
+          - auto_invest_total: inferred auto-invest total / 推算的定投总额
+          - trading_days_counted: number of trading days used for auto-invest calc / 定投推算用的交易日数
+          - by_code: per-fund breakdown / 各基金明细
+    """
+    result = akfund.get_cumulative_net_inflow(since_date=since_date, auto_invest=auto_invest)
+    return json.dumps(result, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
 

@@ -21,6 +21,8 @@ from .calendar import get_trading_status
 from .fees import calc_after_fee_return
 from .overlap import get_fund_top_holdings, get_multi_fund_top_holdings, check_portfolio_overlap
 from .checklist import run_trade_checklist
+from .trades import record_trade, delete_trade, get_trade_history, get_today_trades, get_cumulative_net_inflow
+from .rank import get_fund_rank, get_multi_fund_rank
 
 __all__ = [
     "get_realtime_estimate",
@@ -46,4 +48,11 @@ __all__ = [
     "get_multi_fund_top_holdings",
     "check_portfolio_overlap",
     "run_trade_checklist",
+    "record_trade",
+    "delete_trade",
+    "get_trade_history",
+    "get_today_trades",
+    "get_cumulative_net_inflow",
+    "get_fund_rank",
+    "get_multi_fund_rank",
 ]
