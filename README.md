@@ -71,8 +71,9 @@ akfund-mcp 只负责数据抓取，本身不包含任何投资逻辑。你需要
    - verdict=block：拦截，不输出该建议
    - verdict=caution：保留建议，标注警告项
    - verdict=proceed：正常输出
-5. 输出同类替换候选：对每只持仓基金，调用 search_fund() 搜索同类基金池，
-   再用 get_multi_fund_rank() 批量拉排名，筛选近3月 + 近1月百分位均 ≤ 25% 的基金作为候选
+5. 输出新增资金推荐：调用 get_sector_quotes() 扫描全市场板块，找近1周涨幅前5的板块，
+   再用 search_fund() + get_multi_fund_rank() 筛选近3月+近1月同类排名均进前25%的基金，
+   结合消息面给出 1-2 只买入候选及建议金额（需用户当日提供新增资金金额）
 ```
 
 ### 第二步：开始使用
